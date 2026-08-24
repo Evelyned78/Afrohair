@@ -1,0 +1,81 @@
+# Configuration Docker Compose pour un environnement WordPress basique avec base de donnees MySQL
+# Avec WordPress, WordPress CLI, phpMyAdmin, MySQL et Mailcatcher
+
+services:
+  # Service WordPress principal
+  wp:
+    build: . # on utilise le Dockerfile pour installer Composer dans le conteneur WordPress
+    ports:
+      - ${IP}:${PORT}:80 # Changer l'IP si nécessaire
+    volumes:
+      - ./config/wp_php.ini:/usr/local/etc/php/conf.d/conf.ini
+      - ./wp-config.php:/var/www/html/wp-config.php # Configuration personnalisée de WordPress
+      - ./wp-content:/var/www/html/wp-content # Contenu personnalisé (thèmes, plugins, uploads)
+      - ./composer.json:/var/www/html/composer.json # Composer pour gérer les dépendances WordPress
+    environment:
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: "${DB_NAME}"
+      WORDPRESS_DB_USER: "${DB_USER}"
+      WORDPRESS_DB_PASSWORD: "${DB_PASSWORD}"
+      WORDPRESS_DEBUG: "true" # Activer le mode de débogage de WordPress
+      WORDPRESS_DEBUG_LOG: "true" # Activer le journal de débogage
+      WORDPRESS_DEBUG_DISPLAY: "true" # Ne pas afficher les erreurs dans le navigateur
+    depends_on:
+      - db
+    links:
+      - db
+      - mailcatcher
+
+  # Interface de gestion de la base de données MySQL
+  pma:
+    image: phpmyadmin:latest # https://hub.docker.com/_/phpmyadmin
+    environment:
+      # https://docs.phpmyadmin.net/en/latest/setup.html#docker-environment-variables
+      PMA_HOST: db # Hôte de la base de données
+      PMA_PORT: 3307 # Port MySQL
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}" # Mot de passe root MySQL
+      UPLOAD_LIMIT: 50M # Limite de téléchargement
+    ports:
+      - ${IP}:8080:80
+    links:
+      - db:db
+    volumes:
+      - ./config/pma_php.ini:/usr/local/etc/php/conf.d/conf.ini
+      - ./config/pma_config.php:/etc/phpmyadmin/config.user.inc.php
+
+  # Service de base de données MySQL
+  db:
+    image: mysql:8.4.9 # https://hub.docker.com/_/mysql/ - ou mariadb https://hub.docker.com/_/mariadb
+    ports:
+      - ${IP}:3307:3307 # Changer l'IP si nécessaire
+    command:
+      # Configuration de l'encodage pour supporter les caractères spéciaux
+      [
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci",
+      ]
+    volumes:
+      # - ./wp-data:/docker-entrypoint-initdb.d # Scripts d'initialisation de la BD
+      - db_data:/var/lib/mysql # Persistance des données MySQL
+    environment:
+      MYSQL_DATABASE: "${DB_NAME}" # Nom de la base de données
+      MYSQL_ROOT_PASSWORD: "${DB_PASSWORD}" # Mot de passe root MySQL
+      MYSQL_USER: "${DB_USER}" # Utilisateur MySQL pour WordPress
+      MYSQL_PASSWORD: "${DB_PASSWORD}" # Mot de passe pour l'utilisateur MySQL
+    healthcheck: # Vérification de la santé du conteneur MySQL
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Service de capture des emails pour le développement
+  mailcatcher:
+    image: sj26/mailcatcher:latest
+    ports:
+      - "1080:1080" # Interface Web
+      - "1025:1025" # Port SMTP
+
+# Volumes nommés persistants
+volumes:
+  db_data:
+

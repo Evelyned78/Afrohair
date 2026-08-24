@@ -1,0 +1,8 @@
+wp-content/plugins/
+wp-content/themes/
+wp-content/uploads/
+config/
+vendor/
+composer.lock
+.env
+!wp-content/themes/cp-fse/
